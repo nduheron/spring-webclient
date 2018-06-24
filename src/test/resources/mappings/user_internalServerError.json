@@ -1,0 +1,19 @@
+{
+	"request": {
+		"method": "GET",
+		"urlPattern": "/users/2"
+	},
+	"response": {
+		"status": 400,
+        "fixedDelayMilliseconds": 20,
+		"jsonBody": [
+			{
+			"field": "id",
+			"message": "id 2 is invalid"
+			}
+		],
+		"headers": {
+			"Content-Type": "application/json"
+		}
+	}
+}

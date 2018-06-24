@@ -1,0 +1,17 @@
+{
+	"request": {
+		"method": "GET",
+		"urlPattern": "/users/6"
+	},
+	"response": {
+		"status": 200,
+        "fixedDelayMilliseconds": 6000,
+		"jsonBody": {
+			"lastName": "Duhéron",
+			"firstName": "Nicolas"
+		},
+		"headers": {
+			"Content-Type": "application/json"
+		}
+	}
+}

@@ -1,0 +1,13 @@
+{
+	"request": {
+		"method": "GET",
+		"urlPattern": "/users/4"
+	},
+	"response": {
+		"status": 404,
+        "fixedDelayMilliseconds": 20,
+		"headers": {
+			"Content-Type": "application/json"
+		}
+	}
+}

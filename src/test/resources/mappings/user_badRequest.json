@@ -1,0 +1,13 @@
+{
+	"request": {
+		"method": "GET",
+		"urlPattern": "/users/3"
+	},
+	"response": {
+		"status": 500,
+        "fixedDelayMilliseconds": 20,
+		"headers": {
+			"Content-Type": "application/json"
+		}
+	}
+}
