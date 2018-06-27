@@ -1,11 +1,16 @@
 {
 	"request": {
 		"method": "GET",
-		"urlPattern": "/users/3"
+		"urlPattern": "/users/2"
 	},
 	"response": {
-		"status": 500,
-        "fixedDelayMilliseconds": 20,
+		"status": 400,
+		"jsonBody": [
+			{
+			"field": "id",
+			"message": "id 2 is invalid"
+			}
+		],
 		"headers": {
 			"Content-Type": "application/json"
 		}

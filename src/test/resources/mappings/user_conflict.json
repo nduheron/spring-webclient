@@ -5,7 +5,6 @@
 	},
 	"response": {
 		"status": 409,
-        "fixedDelayMilliseconds": 20,
         "jsonBody": {
 			"code": "DuplicateId",
 			"message": "There's 2 users with id 5"

@@ -1,12 +1,15 @@
 package fr.nduheron.poc.springwebclient;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertNull;
 
 import java.time.Duration;
 
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,6 +39,8 @@ import reactor.test.StepVerifier;
 		WebClientExceptionHandler.class, WebClientTest.ContextConfiguration.class })
 @TestPropertySource(locations = "classpath:application-test.properties")
 public class WebClientTest {
+	private static final Logger logger = LoggerFactory.getLogger(WebClientTest.class);
+
 	@Rule
 	public WireMockRule wireMockRule = new WireMockRule();
 
@@ -84,6 +89,16 @@ public class WebClientTest {
 	public void testInternalServerError() {
 		StepVerifier.create(webClient.get().uri("/users/{id}", 3).retrieve().bodyToMono(User.class))
 				.expectError(TechnicalException.class).verify();
+	}
+
+	@Test
+	public void testIgnoreError() {
+		Mono<User> user = webClient.get().uri("/users/{id}", 3).retrieve().bodyToMono(User.class)
+				.onErrorResume(error -> {
+					logger.warn("Error", error);
+					return Mono.empty();
+				});
+		assertNull(user.block());
 	}
 
 	@Test
