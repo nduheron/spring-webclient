@@ -36,7 +36,7 @@ import reactor.test.StepVerifier;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(loader = AnnotationConfigContextLoader.class, classes = { WebClientLoggingFilter.class,
-		WebClientExceptionHandler.class, WebClientTest.ContextConfiguration.class })
+		WebClientExceptionHandler.class, WebClientTest.ContextConfiguration.class, MicroMeterConfiguration.class })
 @TestPropertySource(locations = "classpath:application-test.properties")
 public class WebClientTest {
 	private static final Logger logger = LoggerFactory.getLogger(WebClientTest.class);

@@ -22,7 +22,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import fr.nduheron.poc.springwebclient.filters.WebClientExceptionHandler;
 import fr.nduheron.poc.springwebclient.filters.WebClientLoggingFilter;
+import fr.nduheron.poc.springwebclient.filters.WebClientMonitoringFilter;
 import fr.nduheron.poc.springwebclient.filters.WebClientRetryHandler;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import reactor.ipc.netty.resources.PoolResources;
@@ -42,6 +44,9 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
 	 */
 	@Autowired(required = false)
 	private ObjectMapper mapper;
+
+	@Autowired
+	private MeterRegistry registry;
 
 	/**
 	 * Les filtres "custom" à ajouter
@@ -95,6 +100,8 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
 		if (retryCount > 0) {
 			exchangeStrategies.filter(new WebClientRetryHandler(retryCount));
 		}
+
+		exchangeStrategies.filter(new WebClientMonitoringFilter(registry));
 
 		if (customFilters != null) {
 			for (ExchangeFilterFunction filter : customFilters) {
