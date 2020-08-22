@@ -10,7 +10,7 @@ import org.springframework.web.reactive.function.client.ExchangeFunction;
 import reactor.core.publisher.Mono;
 
 public class WebClientLoggingFilter implements ExchangeFilterFunction {
-	private static final Logger logger = LoggerFactory.getLogger(WebClientExceptionHandler.class);
+	private static final Logger logger = LoggerFactory.getLogger(WebClientLoggingFilter.class);
 
 	@Override
 	public Mono<ClientResponse> filter(ClientRequest request, ExchangeFunction next) {

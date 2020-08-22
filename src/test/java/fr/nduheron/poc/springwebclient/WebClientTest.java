@@ -1,12 +1,18 @@
 package fr.nduheron.poc.springwebclient;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertNull;
-
-import java.time.Duration;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.tomakehurst.wiremock.junit.WireMockRule;
+import fr.nduheron.poc.springwebclient.exception.BadRequestException;
+import fr.nduheron.poc.springwebclient.exception.NotFoundException;
+import fr.nduheron.poc.springwebclient.exception.TechnicalException;
+import fr.nduheron.poc.springwebclient.filters.WebClientExceptionHandler;
+import fr.nduheron.poc.springwebclient.filters.WebClientLoggingFilter;
+import fr.nduheron.poc.springwebclient.model.User;
+import fr.nduheron.poc.springwebclient.model.UserDuplicateException;
+import org.hamcrest.core.IsInstanceOf;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,99 +25,93 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.context.support.AnnotationConfigContextLoader;
 import org.springframework.web.reactive.function.client.WebClient;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.tomakehurst.wiremock.junit.WireMockRule;
-
-import fr.nduheron.poc.springwebclient.exception.BadRequestException;
-import fr.nduheron.poc.springwebclient.exception.NotFoundException;
-import fr.nduheron.poc.springwebclient.exception.TechnicalException;
-import fr.nduheron.poc.springwebclient.filters.WebClientExceptionHandler;
-import fr.nduheron.poc.springwebclient.filters.WebClientLoggingFilter;
-import fr.nduheron.poc.springwebclient.model.User;
-import fr.nduheron.poc.springwebclient.model.UserDuplicateException;
-import io.netty.handler.timeout.TimeoutException;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Mono;
-import reactor.test.StepVerifier;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertNull;
 
 @RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(loader = AnnotationConfigContextLoader.class, classes = { WebClientLoggingFilter.class,
-		WebClientExceptionHandler.class, WebClientTest.ContextConfiguration.class })
+@ContextConfiguration(loader = AnnotationConfigContextLoader.class, classes = {WebClientLoggingFilter.class,
+        WebClientExceptionHandler.class, WebClientTest.ContextConfiguration.class})
 @TestPropertySource(locations = "classpath:application-test.properties")
 public class WebClientTest {
-	private static final Logger logger = LoggerFactory.getLogger(WebClientTest.class);
+    private static final Logger logger = LoggerFactory.getLogger(WebClientTest.class);
 
-	@Rule
-	public WireMockRule wireMockRule = new WireMockRule();
+    @Rule
+    public WireMockRule wireMockRule = new WireMockRule();
 
-	@Configuration
-	static class ContextConfiguration {
+    @Configuration
+    static class ContextConfiguration {
 
-		@Bean
-		ObjectMapper objectMapper() {
-			return new ObjectMapper();
-		}
+        @Bean
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
+        }
 
-		@Bean
-		WebClientFactory webClientFactory() {
-			WebClientFactory factory = new WebClientFactory();
-			factory.setName("user");
-			return factory;
-		}
-	}
+        @Bean
+        WebClientFactory webClientFactory() {
+            WebClientFactory factory = new WebClientFactory();
+            factory.setName("user");
+            return factory;
+        }
+    }
 
-	@Autowired
-	private WebClient webClient;
+    @Rule
+    public ExpectedException exception = ExpectedException.none();
 
-	@Test
-	public void testOk() {
-		StepVerifier.create(webClient.get().uri("/users/{id}", 1).retrieve().bodyToMono(User.class)).assertNext(u -> {
-			assertThat(u.getFirstName()).isEqualTo("Nicolas");
-			assertThat(u.getLastName()).isEqualTo("Duhéron");
-		}).verifyComplete();
-	}
+    @Autowired
+    private WebClient webClient;
 
-	@Test
-	public void testTimeoutWithRetry() {
-		Duration duration = StepVerifier.create(webClient.get().uri("/users/{id}", 6).retrieve().bodyToMono(User.class))
-				.expectError(TimeoutException.class).verify();
+    @Test
+    public void testOk() {
+        User user = webClient.get().uri("/users/{id}", 1).retrieve().bodyToMono(User.class).block();
 
-		assertThat(duration.getSeconds()).isGreaterThanOrEqualTo(15l).isLessThan(20L);
-	}
+        assertThat(user.getFirstName()).isEqualTo("Nicolas");
+        assertThat(user.getLastName()).isEqualTo("Duhéron");
+    }
 
-	@Test
-	public void testBadRequest() {
-		StepVerifier.create(webClient.get().uri("/users/{id}", 2).retrieve().bodyToMono(User.class))
-				.expectError(BadRequestException.class).verify();
-	}
+    @Test
+    public void testTimeoutWithRetry() {
+        System.out.println("début");
 
-	@Test
-	public void testInternalServerError() {
-		StepVerifier.create(webClient.get().uri("/users/{id}", 3).retrieve().bodyToMono(User.class))
-				.expectError(TechnicalException.class).verify();
-	}
+        webClient.get().uri("/users/{id}", 6).retrieve().bodyToMono(User.class).block();
 
-	@Test
-	public void testIgnoreError() {
-		Mono<User> user = webClient.get().uri("/users/{id}", 3).retrieve().bodyToMono(User.class)
-				.onErrorResume(error -> {
-					logger.warn("Error", error);
-					return Mono.empty();
-				});
-		assertNull(user.block());
-	}
+        System.out.println("fin");
+//		assertThat(duration.getSeconds()).isGreaterThanOrEqualTo(15l).isLessThan(20L);
+    }
 
-	@Test
-	public void testNotFound() {
-		StepVerifier.create(webClient.get().uri("/users/{id}", 4).retrieve().bodyToMono(User.class))
-				.expectError(NotFoundException.class).verify();
-	}
+    @Test
+    public void testBadRequest() {
+        exception.expect(BadRequestException.class);
+        webClient.get().uri("/users/{id}", 2).retrieve().bodyToMono(User.class).block();
+    }
 
-	@Test
-	public void testConflict() {
-		StepVerifier
-				.create(webClient.get().uri("/users/{id}", 5).retrieve().onStatus(HttpStatus.CONFLICT::equals, e -> {
-					return Mono.error(new UserDuplicateException(5));
-				}).bodyToMono(User.class)).expectError(UserDuplicateException.class).verify();
-	}
+    @Test
+    public void testInternalServerError() {
+        exception.expect(TechnicalException.class);
+        webClient.get().uri("/users/{id}", 3).retrieve().bodyToMono(User.class).block();
+    }
+
+    @Test
+    public void testIgnoreError() {
+        Mono<User> user = webClient.get().uri("/users/{id}", 3).retrieve().bodyToMono(User.class)
+                .onErrorResume(error -> {
+                    logger.warn("Error", error);
+                    return Mono.empty();
+                });
+        assertNull(user.block());
+    }
+
+    @Test
+    public void testNotFound() {
+        exception.expect(NotFoundException.class);
+        webClient.get().uri("/users/{id}", 4).retrieve().bodyToMono(User.class).block();
+    }
+
+    @Test
+    public void testConflict() {
+       exception.expect(UserDuplicateException.class);
+       webClient.get().uri("/users/{id}", 5).retrieve().onStatus(HttpStatus.CONFLICT::equals, e -> Mono.error(new UserDuplicateException(5))).bodyToMono(User.class).block();
+    }
 }

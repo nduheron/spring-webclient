@@ -4,7 +4,7 @@ import java.util.List;
 
 import fr.nduheron.poc.springwebclient.exception.model.ErrorParameter;
 
-public class BadRequestException extends Exception {
+public class BadRequestException extends RuntimeException {
 
 	private static final long serialVersionUID = 1L;
 
