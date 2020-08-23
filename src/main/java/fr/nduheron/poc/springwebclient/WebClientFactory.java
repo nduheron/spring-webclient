@@ -5,6 +5,7 @@ import fr.nduheron.poc.springwebclient.filters.WebClientExceptionHandler;
 import fr.nduheron.poc.springwebclient.filters.WebClientLoggingFilter;
 import fr.nduheron.poc.springwebclient.filters.WebClientRetryHandler;
 import io.netty.channel.ChannelOption;
+import io.netty.handler.logging.LogLevel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.InitializingBean;
@@ -24,7 +25,6 @@ import org.springframework.web.reactive.function.client.WebClient.Builder;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 
-import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 public class WebClientFactory implements FactoryBean<WebClient>, InitializingBean {
@@ -72,12 +72,16 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
 
         HttpClient httpClient = HttpClient.create(connectionProvider).tcpConfiguration((tcpClient) -> {
             // Par défaut, on plante si l'on a pas réussi à établir la connection au bout de 500ms
-            return tcpClient.option(ChannelOption.CONNECT_TIMEOUT_MILLIS,
+            tcpClient = tcpClient.option(ChannelOption.CONNECT_TIMEOUT_MILLIS,
                     env.getProperty("client." + name + ".connectionTimeoutMillis", Integer.class, 500))
 
                     // Par défaut, on plante si l'on a pas réussi à obtenir une réponse au bout de 5 secondes
                     .doOnConnected(conn -> conn
                             .addHandlerLast(new ReadTimeoutHandler(env.getProperty("client." + name + ".readTimeoutMillis", Integer.class, 5000), TimeUnit.MILLISECONDS)));
+            if (!env.getProperty("client." + name + ".log.disable", Boolean.class, false)) {
+                tcpClient = tcpClient.wiretap(WebClientFactory.class.getName(), LogLevel.INFO);
+            }
+            return tcpClient;
         });
 
         ReactorClientHttpConnector connector = new ReactorClientHttpConnector(httpClient);
