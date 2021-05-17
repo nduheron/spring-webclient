@@ -1,17 +1,16 @@
 package fr.nduheron.poc.springwebclient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fr.nduheron.poc.springwebclient.filters.WebClientExceptionHandler;
 import fr.nduheron.poc.springwebclient.filters.WebClientLoggingFilter;
+import fr.nduheron.poc.springwebclient.filters.WebClientMonitoringFilter;
 import fr.nduheron.poc.springwebclient.filters.WebClientRetryHandler;
+import fr.nduheron.poc.springwebclient.properties.WebClientProperties;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.netty.channel.ChannelOption;
-import io.netty.handler.logging.LogLevel;
-import io.netty.handler.timeout.ReadTimeoutHandler;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.i18n.LocaleContextHolder;
-import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
@@ -25,17 +24,10 @@ import org.springframework.web.reactive.function.client.WebClient.Builder;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
+import java.util.Optional;
 
 public class WebClientFactory implements FactoryBean<WebClient>, InitializingBean {
-
-    @Autowired
-    private Environment env;
-
-    /**
-     * Le nom du client web
-     */
-    private String name;
 
     /**
      * Le serializer/deserializer JSON
@@ -43,63 +35,60 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
     @Autowired(required = false)
     private ObjectMapper mapper;
 
+    private MeterRegistry meterRegistry;
+
     /**
      * Les filtres "custom" à ajouter
      */
     private ExchangeFilterFunction[] customFilters;
 
+    /**
+     * Les paramètres du client
+     */
+    private WebClientProperties properties;
+
     @Override
-    public void afterPropertiesSet() throws Exception {
-        Assert.notNull(name, "name must not be null");
+    public void afterPropertiesSet() {
+        Assert.notNull(properties, "properties must not be null");
         Assert.notNull(mapper, "mapper must not be null");
     }
 
     @Override
     public WebClient getObject() throws Exception {
+
         ExchangeStrategies strategies = ExchangeStrategies.builder().codecs(configurer -> {
-            configurer.registerDefaults(false);
-            configurer.customCodecs().register(new Jackson2JsonEncoder(mapper, MediaType.APPLICATION_JSON));
-            configurer.customCodecs().register(new Jackson2JsonDecoder(mapper, MediaType.APPLICATION_JSON));
+            configurer.registerDefaults(true);
+            configurer.defaultCodecs().jackson2JsonEncoder(new Jackson2JsonEncoder(mapper, MediaType.APPLICATION_JSON));
+            configurer.defaultCodecs().jackson2JsonDecoder(new Jackson2JsonDecoder(mapper, MediaType.APPLICATION_JSON));
+            configurer.defaultCodecs().maxInMemorySize(properties.getBufferSize());
         }).build();
 
 
-        ConnectionProvider connectionProvider;
-        if (env.containsProperty("client." + name + ".maxTotalConnections")) {
-            connectionProvider = ConnectionProvider.create(name + "Pool", env.getProperty("client." + name + ".maxTotalConnections", Integer.class));
-        } else {
-            connectionProvider = ConnectionProvider.create(name + "Pool");
-        }
+        ConnectionProvider connectionProvider = Optional.ofNullable(properties.getPool().getMaxSize())
+                .map(maxSize -> ConnectionProvider.create(properties.getPool().getName() + "Pool", maxSize))
+                .orElseGet(() -> ConnectionProvider.create(properties.getPool().getName() + "Pool"));
 
-        HttpClient httpClient = HttpClient.create(connectionProvider).tcpConfiguration((tcpClient) -> {
-            // Par défaut, on plante si l'on a pas réussi à établir la connection au bout de 500ms
-            tcpClient = tcpClient.option(ChannelOption.CONNECT_TIMEOUT_MILLIS,
-                    env.getProperty("client." + name + ".connectionTimeoutMillis", Integer.class, 500))
-
-                    // Par défaut, on plante si l'on a pas réussi à obtenir une réponse au bout de 5 secondes
-                    .doOnConnected(conn -> conn
-                            .addHandlerLast(new ReadTimeoutHandler(env.getProperty("client." + name + ".readTimeoutMillis", Integer.class, 5000), TimeUnit.MILLISECONDS)));
-            if (!env.getProperty("client." + name + ".log.disable", Boolean.class, false)) {
-                tcpClient = tcpClient.wiretap(WebClientFactory.class.getName(), LogLevel.INFO);
-            }
-            return tcpClient;
-        });
+        HttpClient httpClient = HttpClient.create(connectionProvider)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, properties.getTimeout().getConnection())
+                .keepAlive(properties.isKeepAlive())
+                .compress(properties.isCompress())
+                .responseTimeout(Duration.ofMillis(properties.getTimeout().getRead()));
 
         ReactorClientHttpConnector connector = new ReactorClientHttpConnector(httpClient);
 
         Builder exchangeStrategies = WebClient.builder()
-                .baseUrl(env.getRequiredProperty("client." + name + ".baseUrl", String.class))
+                .baseUrl(properties.getBaseUrl())
                 .defaultHeader(HttpHeaders.ACCEPT_LANGUAGE, LocaleContextHolder.getLocale().getLanguage())
                 .exchangeStrategies(strategies);
 
-        if (!env.getProperty("client." + name + ".log.disable", Boolean.class, false)) {
-            exchangeStrategies.filter(new WebClientLoggingFilter());
+        if (properties.getLog().isEnable()) {
+            exchangeStrategies.filter(new WebClientLoggingFilter(properties.getLog().getObfuscateHeaders()));
         }
-        exchangeStrategies.filter(new WebClientExceptionHandler());
 
-        // par défaut, on fait 2 retry en cas de timeout
-        int retryCount = env.getProperty("client." + name + ".retryCount", Integer.class, 2);
-        if (retryCount > 0) {
-            exchangeStrategies.filter(new WebClientRetryHandler(retryCount));
+        exchangeStrategies.filter(new WebClientRetryHandler(properties.getRetry()));
+
+        if (meterRegistry != null) {
+            exchangeStrategies.filter(new WebClientMonitoringFilter(meterRegistry));
         }
 
         if (customFilters != null) {
@@ -116,10 +105,6 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
         return WebClient.class;
     }
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
     public void setMapper(ObjectMapper mapper) {
         this.mapper = mapper;
     }
@@ -128,4 +113,11 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
         this.customFilters = customFilters;
     }
 
+    public void setProperties(WebClientProperties properties) {
+        this.properties = properties;
+    }
+
+    public void setMeterRegistry(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
 }
