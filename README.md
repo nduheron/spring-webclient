@@ -63,9 +63,14 @@ Désactiver les logs :
 ```properties
 client.user.log.enable=false
 ```
+
 Customiser la taille du pool de connection :
 
 ```properties
 client.user.pool.name=user
 client.user.pool.size=10
 ```
+
+## Références
+
+* http://ttddyy.github.io/mdc-with-webclient-in-webmvc/

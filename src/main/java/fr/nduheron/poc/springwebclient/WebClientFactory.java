@@ -2,6 +2,7 @@ package fr.nduheron.poc.springwebclient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.nduheron.poc.springwebclient.filters.WebClientLoggingFilter;
+import fr.nduheron.poc.springwebclient.filters.WebClientMdcContextFilter;
 import fr.nduheron.poc.springwebclient.filters.WebClientRetryHandler;
 import fr.nduheron.poc.springwebclient.properties.WebClientProperties;
 import io.netty.channel.ChannelOption;
@@ -97,6 +98,8 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
                 exchangeStrategies.filter(filter);
             }
         }
+
+        exchangeStrategies.filter(new WebClientMdcContextFilter());
 
         return exchangeStrategies.clientConnector(connector).build();
     }
