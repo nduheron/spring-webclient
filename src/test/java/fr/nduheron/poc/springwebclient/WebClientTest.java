@@ -2,6 +2,7 @@ package fr.nduheron.poc.springwebclient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import fr.nduheron.poc.springwebclient.configuration.WebClientMonitoringFilterConfiguration;
 import fr.nduheron.poc.springwebclient.model.User;
 import fr.nduheron.poc.springwebclient.model.UserDuplicateException;
 import fr.nduheron.poc.springwebclient.properties.WebClientProperties;
@@ -16,10 +17,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.actuate.autoconfigure.metrics.MetricsProperties;
+import org.springframework.boot.actuate.metrics.web.reactive.client.DefaultWebClientExchangeTagsProvider;
+import org.springframework.boot.actuate.metrics.web.reactive.client.WebClientExchangeTagsProvider;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
@@ -39,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnableConfigurationProperties
 @ContextConfiguration(
         loader = AnnotationConfigContextLoader.class,
-        classes = {WebClientTest.ContextConfiguration.class}
+        classes = {WebClientTest.ContextConfiguration.class, WebClientMonitoringFilterConfiguration.class}
 )
 @TestPropertySource(locations = "classpath:application-test.properties")
 public class WebClientTest {
@@ -51,7 +56,7 @@ public class WebClientTest {
     private WebClient webClient;
 
     @Test
-    public void testOk() {
+    void testOk() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 1).retrieve().bodyToMono(User.class)).assertNext(u -> {
             assertThat(u.getFirstName()).isEqualTo("Nicolas");
             assertThat(u.getLastName()).isEqualTo("Duhéron");
@@ -61,7 +66,7 @@ public class WebClientTest {
     }
 
     @Test
-    public void testTimeoutWithRetry() {
+    void testTimeoutWithRetry() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 6)
                 .retrieve()
                 .bodyToMono(User.class))
@@ -72,7 +77,7 @@ public class WebClientTest {
     }
 
     @Test
-    public void testBadRequest() {
+    void testBadRequest() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 2).retrieve()
                 .bodyToMono(User.class))
                 .expectError(WebClientResponseException.BadRequest.class)
@@ -81,7 +86,7 @@ public class WebClientTest {
     }
 
     @Test
-    public void testInternalServerError() {
+    void testInternalServerError() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 3).retrieve()
                 .bodyToMono(User.class))
                 .expectError(WebClientResponseException.InternalServerError.class)
@@ -89,7 +94,7 @@ public class WebClientTest {
     }
 
     @Test
-    public void testIgnoreError() {
+    void testIgnoreError() {
         Mono<User> user = webClient.get().uri("/users/{id}", 3).retrieve().bodyToMono(User.class)
                 .onErrorResume(error -> {
                     logger.warn("Error", error);
@@ -101,7 +106,7 @@ public class WebClientTest {
     }
 
     @Test
-    public void testNotFound() {
+    void testNotFound() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 4).retrieve()
                 .bodyToMono(User.class))
                 .expectError(WebClientResponseException.NotFound.class)
@@ -111,7 +116,7 @@ public class WebClientTest {
     }
 
     @Test
-    public void testConflict() {
+    void testConflict() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 5).retrieve()
                 .onStatus(HttpStatus.CONFLICT::equals, e -> Mono.error(new UserDuplicateException()))
                 .bodyToMono(User.class))
@@ -149,13 +154,22 @@ public class WebClientTest {
         WebClientFactory webClientFactory() {
             WebClientFactory factory = new WebClientFactory();
             factory.setProperties(userWebClientProperties());
-            factory.setMeterRegistry(meterRegistry());
             return factory;
         }
 
         @Bean
         MeterRegistry meterRegistry() {
             return new LoggingMeterRegistry();
+        }
+
+        @Bean
+        WebClientExchangeTagsProvider tagsProviders() {
+            return new DefaultWebClientExchangeTagsProvider();
+        }
+
+        @Bean
+        MetricsProperties metricsProperties() {
+            return new MetricsProperties();
         }
 
         @Bean

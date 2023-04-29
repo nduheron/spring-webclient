@@ -2,14 +2,13 @@ package fr.nduheron.poc.springwebclient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import fr.nduheron.poc.springwebclient.filters.WebClientLoggingFilter;
-import fr.nduheron.poc.springwebclient.filters.WebClientMonitoringFilter;
 import fr.nduheron.poc.springwebclient.filters.WebClientRetryHandler;
 import fr.nduheron.poc.springwebclient.properties.WebClientProperties;
-import io.micrometer.core.instrument.MeterRegistry;
 import io.netty.channel.ChannelOption;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -35,7 +34,9 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
     @Autowired(required = false)
     private ObjectMapper mapper;
 
-    private MeterRegistry meterRegistry;
+    @Autowired(required = false)
+    @Qualifier("metricsWebClientFilterFunction")
+    private ExchangeFilterFunction metricsWebClientFilterFunction;
 
     /**
      * Les filtres "custom" à ajouter
@@ -54,7 +55,7 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
     }
 
     @Override
-    public WebClient getObject() throws Exception {
+    public WebClient getObject() {
 
         ExchangeStrategies strategies = ExchangeStrategies.builder().codecs(configurer -> {
             configurer.registerDefaults(true);
@@ -87,8 +88,8 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
 
         exchangeStrategies.filter(new WebClientRetryHandler(properties.getRetry()));
 
-        if (meterRegistry != null) {
-            exchangeStrategies.filter(new WebClientMonitoringFilter(meterRegistry));
+        if (metricsWebClientFilterFunction != null) {
+            exchangeStrategies.filter(metricsWebClientFilterFunction);
         }
 
         if (customFilters != null) {
@@ -115,9 +116,5 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
 
     public void setProperties(WebClientProperties properties) {
         this.properties = properties;
-    }
-
-    public void setMeterRegistry(MeterRegistry meterRegistry) {
-        this.meterRegistry = meterRegistry;
     }
 }
