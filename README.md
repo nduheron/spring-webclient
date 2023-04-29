@@ -47,8 +47,8 @@ client.user.baseUrl=http://localhost:8080
 Customiser les timeout (10 secondes en lecture et 1 seconde pour la connection) :
 
 ```properties
-client.user.timeout.read=10000
-client.user.timeout.connection=1000
+client.user.timeout.read=10s
+client.user.timeout.connection=1s
 ```
 Customiser la stratégie de retry :
 

@@ -24,7 +24,6 @@ import org.springframework.web.reactive.function.client.WebClient.Builder;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 
-import java.time.Duration;
 import java.util.Optional;
 
 public class WebClientFactory implements FactoryBean<WebClient>, InitializingBean {
@@ -58,11 +57,11 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
     @Override
     public WebClient getObject() {
 
-        ExchangeStrategies strategies = ExchangeStrategies.builder().codecs(configurer -> {
-            configurer.registerDefaults(true);
-            configurer.defaultCodecs().jackson2JsonEncoder(new Jackson2JsonEncoder(mapper, MediaType.APPLICATION_JSON));
-            configurer.defaultCodecs().jackson2JsonDecoder(new Jackson2JsonDecoder(mapper, MediaType.APPLICATION_JSON));
-            configurer.defaultCodecs().maxInMemorySize(properties.getBufferSize());
+        ExchangeStrategies strategies = ExchangeStrategies.builder().codecs(it -> {
+            it.registerDefaults(true);
+            it.defaultCodecs().jackson2JsonEncoder(new Jackson2JsonEncoder(mapper, MediaType.APPLICATION_JSON));
+            it.defaultCodecs().jackson2JsonDecoder(new Jackson2JsonDecoder(mapper, MediaType.APPLICATION_JSON));
+            it.defaultCodecs().maxInMemorySize(properties.getBufferSize());
         }).build();
 
 
@@ -71,10 +70,10 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
                 .orElseGet(() -> ConnectionProvider.create(properties.getPool().getName() + "Pool"));
 
         HttpClient httpClient = HttpClient.create(connectionProvider)
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, properties.getTimeout().getConnection())
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) properties.getTimeout().getConnection().toMillis())
                 .keepAlive(properties.isKeepAlive())
                 .compress(properties.isCompress())
-                .responseTimeout(Duration.ofMillis(properties.getTimeout().getRead()));
+                .responseTimeout(properties.getTimeout().getRead());
 
         ReactorClientHttpConnector connector = new ReactorClientHttpConnector(httpClient);
 

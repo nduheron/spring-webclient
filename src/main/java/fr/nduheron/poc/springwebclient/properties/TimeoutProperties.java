@@ -1,22 +1,24 @@
 package fr.nduheron.poc.springwebclient.properties;
 
-public class TimeoutProperties {
-    private int read = 5000;
-    private int connection = 500;
+import java.time.Duration;
 
-    public int getRead() {
+public class TimeoutProperties {
+    private Duration read = Duration.ofSeconds(5);
+    private Duration connection = Duration.ofMillis(500);
+
+    public Duration getRead() {
         return read;
     }
 
-    public void setRead(int read) {
+    public void setRead(Duration read) {
         this.read = read;
     }
 
-    public int getConnection() {
+    public Duration getConnection() {
         return connection;
     }
 
-    public void setConnection(int connection) {
+    public void setConnection(Duration connection) {
         this.connection = connection;
     }
 }
