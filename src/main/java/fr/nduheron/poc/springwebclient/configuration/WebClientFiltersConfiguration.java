@@ -1,20 +1,24 @@
 package fr.nduheron.poc.springwebclient.configuration;
 
+import fr.nduheron.poc.springwebclient.filters.WebClientHttpHeadersFilter;
+import fr.nduheron.poc.springwebclient.properties.WebClientProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.actuate.autoconfigure.metrics.MetricsProperties;
 import org.springframework.boot.actuate.metrics.web.reactive.client.MetricsWebClientFilterFunction;
 import org.springframework.boot.actuate.metrics.web.reactive.client.WebClientExchangeTagsProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
+
+import javax.servlet.http.HttpServletRequest;
 
 @Configuration
-@ConditionalOnBean({MeterRegistry.class, WebClientExchangeTagsProvider.class, MetricsProperties.class})
-public class WebClientMonitoringFilterConfiguration {
+public class WebClientFiltersConfiguration {
 
     @Bean
-    public ExchangeFilterFunction metricsWebClientFilterFunction(
+    @ConditionalOnBean({MeterRegistry.class, WebClientExchangeTagsProvider.class, MetricsProperties.class})
+    public MetricsWebClientFilterFunction metricsWebClientFilterFunction(
             MeterRegistry meterRegistry,
             WebClientExchangeTagsProvider tagsProvider,
             MetricsProperties metricsProperties
@@ -26,6 +30,16 @@ public class WebClientMonitoringFilterConfiguration {
                 request.getMetricName(),
                 request.getAutotime()
         );
+    }
+
+
+    @Bean
+    @ConditionalOnClass(HttpServletRequest.class)
+    public WebClientHttpHeadersFilter webClientHttpHeadersFilter(WebClientProperties properties) {
+        if (properties.getHeaders().getHttp().isEmpty()) {
+            return null;
+        }
+        return new WebClientHttpHeadersFilter(properties.getHeaders().getHttp());
     }
 
 }

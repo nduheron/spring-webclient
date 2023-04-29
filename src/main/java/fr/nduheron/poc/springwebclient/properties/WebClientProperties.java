@@ -13,6 +13,7 @@ public class WebClientProperties {
     @NotEmpty
     private String baseUrl;
     private LogProperties log = new LogProperties();
+    private HeaderProperties headers = new HeaderProperties();
 
     public TimeoutProperties getTimeout() {
         return timeout;
@@ -78,5 +79,13 @@ public class WebClientProperties {
 
     public void setLog(LogProperties log) {
         this.log = log;
+    }
+
+    public HeaderProperties getHeaders() {
+        return headers;
+    }
+
+    public void setHeaders(HeaderProperties headers) {
+        this.headers = headers;
     }
 }

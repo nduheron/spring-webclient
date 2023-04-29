@@ -70,7 +70,3 @@ Customiser la taille du pool de connection :
 client.user.pool.name=user
 client.user.pool.size=10
 ```
-
-## Références
-
-* http://ttddyy.github.io/mdc-with-webclient-in-webmvc/

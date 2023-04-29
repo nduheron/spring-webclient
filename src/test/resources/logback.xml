@@ -2,11 +2,11 @@
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{HH:mm:ss} [%thread] %-5level %logger{36} - %X{TEST_ID}-%X{IGNORED_ID} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <logger name="fr.nduheron" level="DEBUG"/> -->
+    <logger name="fr.nduheron" level="DEBUG"/>
 
     <root level="WARN">
         <appender-ref ref="STDOUT"/>

@@ -11,9 +11,19 @@ import reactor.core.scheduler.Schedulers;
 import java.util.Map;
 
 /**
- * Filtre permettant de propager le contexte slf4j
+ * Refer to <a href="http://ttddyy.github.io/mdc-with-webclient-in-webmvc/">MDC with WebClient</a>
  */
 public class WebClientMdcContextFilter implements ExchangeFilterFunction {
+
+    @Override
+    public Mono<ClientResponse> filter(ClientRequest request, ExchangeFunction next) {
+        Map<String, String> map = MDC.getCopyOfContextMap();
+        return next.exchange(request).doOnNext(it -> {
+            if (map != null) {
+                MDC.setContextMap(map);
+            }
+        });
+    }
 
     static {
         Schedulers.onScheduleHook("mdc", runnable -> {
@@ -31,14 +41,4 @@ public class WebClientMdcContextFilter implements ExchangeFilterFunction {
         });
     }
 
-    @Override
-    public Mono<ClientResponse> filter(ClientRequest request, ExchangeFunction next) {
-        Map<String, String> map = MDC.getCopyOfContextMap();
-        return next.exchange(request)
-                .doOnNext(it -> {
-                    if (map != null) {
-                        MDC.setContextMap(map);
-                    }
-                });
-    }
 }

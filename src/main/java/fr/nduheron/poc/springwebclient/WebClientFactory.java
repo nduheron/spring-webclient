@@ -1,15 +1,13 @@
 package fr.nduheron.poc.springwebclient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fr.nduheron.poc.springwebclient.filters.WebClientLoggingFilter;
-import fr.nduheron.poc.springwebclient.filters.WebClientMdcContextFilter;
-import fr.nduheron.poc.springwebclient.filters.WebClientRetryHandler;
+import fr.nduheron.poc.springwebclient.filters.*;
 import fr.nduheron.poc.springwebclient.properties.WebClientProperties;
 import io.netty.channel.ChannelOption;
 import org.springframework.beans.factory.FactoryBean;
 import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.actuate.metrics.web.reactive.client.MetricsWebClientFilterFunction;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -35,8 +33,10 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
     private ObjectMapper mapper;
 
     @Autowired(required = false)
-    @Qualifier("metricsWebClientFilterFunction")
-    private ExchangeFilterFunction metricsWebClientFilterFunction;
+    private MetricsWebClientFilterFunction metricsWebClientFilterFunction;
+
+    @Autowired(required = false)
+    private WebClientHttpHeadersFilter webClientHttpHeadersFilter;
 
     /**
      * Les filtres "custom" à ajouter
@@ -82,11 +82,22 @@ public class WebClientFactory implements FactoryBean<WebClient>, InitializingBea
                 .defaultHeader(HttpHeaders.ACCEPT_LANGUAGE, LocaleContextHolder.getLocale().getLanguage())
                 .exchangeStrategies(strategies);
 
+        if (properties.getHeaders().getMdc() != null) {
+            exchangeStrategies.filter(new WebClientMdcToHeadersFilter(properties.getHeaders().getMdc()));
+        }
+
+        if (webClientHttpHeadersFilter != null) {
+            exchangeStrategies.filter(webClientHttpHeadersFilter);
+        }
+
         if (properties.getLog().isEnable()) {
             exchangeStrategies.filter(new WebClientLoggingFilter(properties.getLog().getObfuscateHeaders()));
         }
 
-        exchangeStrategies.filter(new WebClientRetryHandler(properties.getRetry()));
+
+        if (properties.getRetry() != null && properties.getRetry().getCount() > 0) {
+            exchangeStrategies.filter(new WebClientRetryHandler(properties.getRetry()));
+        }
 
         if (metricsWebClientFilterFunction != null) {
             exchangeStrategies.filter(metricsWebClientFilterFunction);

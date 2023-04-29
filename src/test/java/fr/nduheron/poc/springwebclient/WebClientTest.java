@@ -2,20 +2,18 @@ package fr.nduheron.poc.springwebclient;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
-import fr.nduheron.poc.springwebclient.configuration.WebClientMonitoringFilterConfiguration;
+import fr.nduheron.poc.springwebclient.configuration.WebClientFiltersConfiguration;
 import fr.nduheron.poc.springwebclient.model.User;
 import fr.nduheron.poc.springwebclient.model.UserDuplicateException;
 import fr.nduheron.poc.springwebclient.properties.WebClientProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.logging.LoggingMeterRegistry;
 import io.netty.handler.timeout.TimeoutException;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.autoconfigure.metrics.MetricsProperties;
 import org.springframework.boot.actuate.metrics.web.reactive.client.DefaultWebClientExchangeTagsProvider;
@@ -24,17 +22,21 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.test.context.support.AnnotationConfigContextLoader;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+
+import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
@@ -44,7 +46,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnableConfigurationProperties
 @ContextConfiguration(
         loader = AnnotationConfigContextLoader.class,
-        classes = {WebClientTest.ContextConfiguration.class, WebClientMonitoringFilterConfiguration.class}
+        classes = {WebClientTest.ContextConfiguration.class, WebClientFiltersConfiguration.class}
 )
 @TestPropertySource(locations = "classpath:application-test.properties")
 public class WebClientTest {
@@ -68,8 +70,8 @@ public class WebClientTest {
     @Test
     void testTimeoutWithRetry() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 6)
-                .retrieve()
-                .bodyToMono(User.class))
+                        .retrieve()
+                        .bodyToMono(User.class))
                 .expectErrorMatches(e -> (e instanceof WebClientRequestException) && e.getCause() instanceof TimeoutException)
                 .verify();
 
@@ -79,7 +81,7 @@ public class WebClientTest {
     @Test
     void testBadRequest() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 2).retrieve()
-                .bodyToMono(User.class))
+                        .bodyToMono(User.class))
                 .expectError(WebClientResponseException.BadRequest.class)
                 .verify();
         wireMockServer.verify(1, getRequestedFor(urlEqualTo("/users/2")));
@@ -88,7 +90,7 @@ public class WebClientTest {
     @Test
     void testInternalServerError() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 3).retrieve()
-                .bodyToMono(User.class))
+                        .bodyToMono(User.class))
                 .expectError(WebClientResponseException.InternalServerError.class)
                 .verify();
     }
@@ -108,7 +110,7 @@ public class WebClientTest {
     @Test
     void testNotFound() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 4).retrieve()
-                .bodyToMono(User.class))
+                        .bodyToMono(User.class))
                 .expectError(WebClientResponseException.NotFound.class)
                 .verify();
 
@@ -118,8 +120,8 @@ public class WebClientTest {
     @Test
     void testConflict() {
         StepVerifier.create(webClient.get().uri("/users/{id}", 5).retrieve()
-                .onStatus(HttpStatus.CONFLICT::equals, e -> Mono.error(new UserDuplicateException()))
-                .bodyToMono(User.class))
+                        .onStatus(HttpStatus.CONFLICT::equals, e -> Mono.error(new UserDuplicateException()))
+                        .bodyToMono(User.class))
                 .expectError(UserDuplicateException.class)
                 .verify();
 
@@ -140,6 +142,17 @@ public class WebClientTest {
     @AfterEach
     public void reset() {
         wireMockServer.resetAll();
+    }
+
+    @BeforeEach
+    public void init() {
+        MDC.put("TEST_ID", UUID.randomUUID().toString());
+        MDC.put("IGNORED_ID", UUID.randomUUID().toString());
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("HEADER1", UUID.randomUUID().toString());
+        request.addHeader("HEADER2", UUID.randomUUID().toString());
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
     @Configuration
